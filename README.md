@@ -69,3 +69,54 @@ Your Raft peers should exchange RPCs using the labrpc Go (`internal/labrpc`) pac
 
 ## Part 2A
 
+**Task**
+
+Implement leader election and heartbeats(`AppendEntries RPCs with no log entries). The goal for Part 2A is for a single leader to be elected, for the leader to remain the leader if there are no failures, and for a new leader to take over if the old leader fails or if packets to/from the old leader are lost.
+
+✅ To test your code, run:
+```sh
+$ make test_a
+# or: go test -run 2A ./pkg/raft
+```
+
+💡A good way to debug your code is to insert print statements when a peer sends or receives a message, and collect the output in a file with `go test -run 2A ./pkg/raft > out`. Then, by studying the trace messages in the `out` file, you can identify where your implementation deviates from the desired protocol. You might find `DPrintf` in `util.go` useful to turn printing on and off as you debug different problems.
+
+**Figure**
+
+[Insert Figure Here]
+
+
+**Hints:**
+* Add any state you need to the `Raft` struct in `raft.go`. You'll also need to define a struct to hold information about each log entry. Your code should follow Figure 2 in the paper as closely as possible.
+* Fill in the `RequestVoteArgs` and the `RequestVoteReply` structs. Modify `Make()` to create a background goroutine that will kick off leader election periodically by sending out `RequestVote` RPCs when it hasn't head from another peer for a while. This way a peer will learn who is the leader, if there is already a leader, or become the leader itself. Implement the `RequestVote()` RPC handler so that servers will vote for one another.
+* To implement heartbeats, define an `AppendEntries` RPC struct (though you may not need all the arguments yet), and have the leader send them out periodically. Write an `AppendEntries` RPC handler method that resets the election timeout so that other servers don't step forward as leaders when one has already been elected. 
+* The tester requires that the leader send heartbeat RPCs no more than 10 times per second.
+* The tester requires your Raft to elect a new leader within 5 seconds of the failure of the old leader (if a majority of peers can still communicate). Remember, however, that leader election may require multiple rounds in case of a split vote. You must pick election timeouts (and thus heartheat intervals) that are short enough that it's very likely that an _election will complete in < 5 seconds even if requires multiple rounds_.
+* The paper's Section 5.2 mentions election timeouts in the range of 150 to 300 ms; however, since the tester limits you to 10 heartbeats per second, you will have to use a larger election timeout than the paper.
+* You may find Go's [rand](https://golang.org/pkg/math/rand/) useful.
+* You'll need to write code that takes actions periodically or after delays in time. The easiest way to do this is to create a goroutine with a loop that calls `time.Sleep()`. The hard way is to use Go's `time.Timer` or `time.Ticker`, which are difficult to use correctly.
+* If you are puzzled about locking, you may find this [advice](https://pdos.csail.mit.edu/6.824/labs/raft-locking.txt) helpful.
+* If your code has trouble passing the tests, read the paper's Figure 2 again; the full logic for leader election is spread over multiple parts of the figure.
+* Go RPC sends only struct fields whose names start with capital letters. Sub-structures must also have capitalized field names (e.g. fields of log records in an array). The `internal/labgob` package will warn you about this; don't ignore it.
+* You should check your code with `go test -race`, and fix any races it reports.
+
+Be sure that you pass the 2A tests, seeing something like this:
+
+```sh
+$ make test_a
+Test (2A): initial election ...
+  ... Passed --   2.5  3   30    0
+Test (2A): election after network failure ...
+  ... Passed --   4.5  3   78    0
+PASS
+ok      raft    7.016s
+$
+```
+
+Each "Passed" line contains the following 4 numbers:
+* the time that the test took in seconds, 
+* the number of Raft peers (3 or 5), 
+* the number of RPCs sent during the test, and 
+* the number of log entries that Raft reports were committed.
+
+The grading script will fail your solution _if it takes more than 600 seconds for all tests, or if any individual test takes more than 120 seconds.

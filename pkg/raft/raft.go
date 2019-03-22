@@ -133,6 +133,27 @@ type RequestVoteReply struct {
 //
 func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// Your code here (2A, 2B).
+	myTerm := rf.currentTerm
+	candidateTerm := args.Term
+
+	if candidateTerm < myTerm {
+		*reply = RequestVoteReply{VoteGranted: false, Term: myTerm}
+	} else if candidateTerm == myTerm {
+		// TODO, SET NULL VOTE TO -1 SOMEWHERE
+		if (rf.votedFor == -1) || (rf.votedFor == args.CandidateId) {
+			rf.votedFor = args.CandidateId
+			*reply = RequestVoteReply{VoteGranted: true, Term: myTerm}
+			rf.RegenerateTimeout()
+		} else {
+			*reply = RequestVoteReply{VoteGranted: false, Term: myTerm}
+		}
+	} else { // candidate is in later term than me
+		rf.votedFor = args.CandidateId
+		rf.currentLeaderId = -1
+		rf.currentTerm = candidateTerm
+		*reply = RequestVoteReply{VoteGranted: true, Term: candidateTerm}
+		rf.RegenerateTimeout()
+	}
 }
 
 //

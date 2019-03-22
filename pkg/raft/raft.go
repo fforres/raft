@@ -44,10 +44,13 @@ type ApplyMsg struct {
 // A Go object implementing a single Raft peer.
 //
 type Raft struct {
-	mu        sync.Mutex          // Lock to protect shared access to this peer's state
-	peers     []*labrpc.ClientEnd // RPC end points of all peers
-	persister *Persister          // Object to hold this peer's persisted state
-	me        int                 // this peer's index into peers[]
+	mu              sync.Mutex          // Lock to protect shared access to this peer's state
+	peers           []*labrpc.ClientEnd // RPC end points of all peers
+	persister       *Persister          // Object to hold this peer's persisted state
+	me              int                 // this peer's index into peers[]
+	currentTerm     int
+	votedFor        int
+	currentLeaderId int
 
 	// Your data here (2A, 2B, 2C).
 	// Look at the paper's Figure 2 for a description of what
@@ -59,10 +62,11 @@ type Raft struct {
 // believes it is the leader.
 func (rf *Raft) GetState() (int, bool) {
 
-	var term int
-	var isleader bool
+	// var term int
+	// var isleader bool TODO
+
 	// Your code here (2A).
-	return term, isleader
+	return rf.currentTerm, false
 }
 
 //
@@ -107,8 +111,11 @@ func (rf *Raft) readPersist(data []byte) {
 // example RequestVote RPC arguments structure.
 // field names must start with capital letters!
 //
+
 type RequestVoteArgs struct {
 	// Your data here (2A, 2B).
+	Term        int
+	CandidateId int
 }
 
 //
@@ -117,6 +124,8 @@ type RequestVoteArgs struct {
 //
 type RequestVoteReply struct {
 	// Your data here (2A).
+	VoteGranted bool
+	Term        int
 }
 
 //
@@ -158,6 +167,51 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *RequestVoteReply) bool {
 	ok := rf.peers[server].Call("Raft.RequestVote", args, reply)
 	return ok
+}
+
+type AppendEntriesArgs struct {
+	// Your data here (2A, 2B).
+	Term         int
+	LeaderId     int
+	PrevLogIndex int
+	// Entries []type
+	// LeaderCommit int
+}
+
+//
+// example RequestVote RPC reply structure.
+// field names must start with capital letters!
+//
+type AppendEntriesReply struct {
+	// Your data here (2A).
+	Term    int
+	Success bool
+}
+
+// end.Call("Raft.AppendEntries", &args, &reply) -- send an RPC, wait for reply.
+func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
+	myTerm := rf.currentTerm
+	leaderTerm := args.Term
+
+	if leaderTerm < myTerm {
+		*reply = AppendEntriesReply{Success: false, Term: myTerm}
+	} else if leaderTerm == myTerm {
+		*reply = AppendEntriesReply{Success: true, Term: leaderTerm}
+		rf.currentLeaderId = args.LeaderId
+		rf.RegenerateTimeout()
+	} else { // leaderTerm > myTerm
+		*reply = AppendEntriesReply{Success: true, Term: leaderTerm}
+		rf.currentTerm = leaderTerm // can't use myTerm to modify original
+		rf.currentLeaderId = args.LeaderId
+		rf.votedFor = -1
+		rf.RegenerateTimeout()
+	}
+
+}
+
+func (rf *Raft) RegenerateTimeout() {
+	// TODO YOU NEED TO REGENERATE THE TIMEOUT
+	return
 }
 
 //
